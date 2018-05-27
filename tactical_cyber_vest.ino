@@ -195,7 +195,7 @@ CRGB leds[LED_PIN_COUNT][LED_LED_COUNT];
 #define FRAMES_PER_SECOND  120
 
 void setup() {
-  delay(2000); // 2 second delay for recovery
+  delay(500); // 2 second delay for recovery
 
   Wire.begin(I2C_ADDR);
   Wire.onReceive(i2c_receive);
@@ -210,37 +210,77 @@ void setup() {
   FastLED.setBrightness(BRIGHTNESS);
 }
 
-uint8_t gHue = 0; // rotating "base color" used by many of the patterns
-uint8_t pos = 0;
-uint8_t circ = 0;
-
-uint8_t hue = 0;
-
+// i2c callback
 void i2c_receive(int count) {
-  char c = 0;
+  uint8_t c = 0;
   while ( Wire.available() ) {
     c = Wire.read();
+    eval_cmd(c);
   }
-  hue = c;
 }
-int state = 0;
-int mode = 5; //[0..max_mode]
-int mspeed = 2; //[0..4]
-int mbrightness = 2; //[0..4]
-const int abrightness [5]= {3, 9, 27, 81, 243};
-int waitingTime = 10;
+
+uint8_t mode = 0;
+
+void eval_cmd(uint8_t cmd) {
+  switch ( cmd ) {
+    case 100:
+      mode = 0;
+      start_mode();
+      break;
+    case 101:
+      mode = 1;
+      start_mode();
+      break;
+    case 102:
+      mode = 2;
+      start_mode();
+      break;
+    case 103:
+      mode = 3;
+      start_mode();
+      break;
+    case 104:
+      mode = 4;
+      start_mode();
+      break;
+    case 105:
+      mode = 5;
+      start_mode();
+      break;
+    case 200:
+      FastLED.setBrightness(0);
+      break;
+    case 201:
+      FastLED.setBrightness(3);
+      break;
+    case 202:
+      FastLED.setBrightness(9);
+      break;
+    case 203:
+      FastLED.setBrightness(27);
+      break;
+    case 204:
+      FastLED.setBrightness(81);
+      break;
+    case 205:
+      FastLED.setBrightness(243);
+      break;
+  }
+}
 
 void loop() {
   receive();
 
   sensors();
-  
+
+  EVERY_N_MILLISECONDS(10) {
+    update_leds();
+  }
+
   write_leds();
 
   // send the 'leds' array out to the actual LED strip
   FastLED.show();  
-  FastLED.setBrightness(abrightness[mbrightness]);
-  FastLED.delay(waitingTime); 
 
 //  EVERY_N_MILLISECONDS( 10 ) { 
 //    pos++;
@@ -258,8 +298,194 @@ void loop() {
 //  }
 }
 
+void start_mode() {
+  switch (mode) {
+    case 0:
+      i_pulse();
+      break;
+    case 1:
+      i_circle();
+      break;
+    case 2:
+      i_runner();
+      break;
+    case 3:
+      i_rainbow();
+      break;
+    case 4:
+      i_black();
+      break;
+  }
+}
+void update_leds() {
+  switch (mode) {
+    case 0:
+      u_pulse();
+      break;
+    case 1:
+      u_circle();
+      break;
+    case 2:
+      u_runner();
+      break;
+    case 3:
+      u_rainbow();
+      break;
+    case 4:
+      u_black();
+      break;
+  }
+}
+void write_leds() {
+  switch (mode) {
+    case 0:
+      w_pulse();
+      break;
+    case 1:
+      w_circle();
+      break;
+    case 2:
+      w_runner();
+      break;
+    case 3:
+      w_rainbow();
+      break;
+    case 4:
+      w_black();
+      break;
+  }
+}
+
+uint8_t s0=0;
+uint8_t s1=0;
+ledaddr_t *sline=NULL;
+uint8_t slen = 0;
+void i_circle() {
+  s1=0;
+}
+void w_circle() {
+  if ( s1==0 ) {
+    fill_solid(upleft, sizeof(upleft)/2, CRGB::Blue);
+    fill_solid(upright, sizeof(upright)/2, CRGB::Black);
+    fill_solid(loleft, sizeof(loleft)/2, CRGB::Black);
+    fill_solid(loright, sizeof(loright)/2, CRGB::Black);
+  } else if ( s1==1 ) {
+    fill_solid(upleft, sizeof(upleft)/2, CRGB::Black);
+    fill_solid(upright, sizeof(upright)/2, CRGB::Blue);
+    fill_solid(loleft, sizeof(loleft)/2, CRGB::Black);
+    fill_solid(loright, sizeof(loright)/2, CRGB::Black);
+  } else if ( s1==2 ) {
+    fill_solid(upleft, sizeof(upleft)/2, CRGB::Black);
+    fill_solid(upright, sizeof(upright)/2, CRGB::Black);
+    fill_solid(loleft, sizeof(loleft)/2, CRGB::Black);
+    fill_solid(loright, sizeof(loright)/2, CRGB::Blue);
+  } else if ( s1==3 ) {
+    fill_solid(upleft, sizeof(upleft)/2, CRGB::Black);
+    fill_solid(upright, sizeof(upright)/2, CRGB::Black);
+    fill_solid(loleft, sizeof(loleft)/2, CRGB::Blue);
+    fill_solid(loright, sizeof(loright)/2, CRGB::Black);
+  }
+}
+void u_circle() {
+  EVERY_N_MILLISECONDS(50) {
+    s1++;
+    if ( s1>3 ) {
+      s1=0;
+    }
+  }
+}
+
+void i_pulse() {
+  s1=0;
+}
+void w_pulse() {
+  single_pos(upleft, sizeof(upleft)/2, s1);
+  single_pos(upright, sizeof(upright)/2, s1);
+  single_pos(loleft, sizeof(loleft)/2, s1);
+  single_pos(loright, sizeof(loright)/2, s1);
+}
+void u_pulse() {
+  EVERY_N_MILLISECONDS(5) {
+    s1++;
+    s1 &= 63;
+  }
+}
+
+// runner --
+void i_runner() {
+  s0 = 3;
+  s1 = 0;
+  runner_pick(s1);
+}
+void runner_pick(uint8_t last) {
+  last &= 3;
+  s0 = (last + random8(3) + 1) % 4;
+  switch ( s0) {
+    case 0:
+      sline = upleft;
+      slen = sizeof(upleft)/2;
+      break;
+    case 1:
+      sline = upright;
+      slen = sizeof(upright)/2;
+      break;
+    case 2:
+      sline = loleft;
+      slen = sizeof(loleft)/2;
+      break;
+    default:
+      sline = loright;
+      slen = sizeof(loright)/2;
+      break;
+  }
+}
+void w_runner() {
+  fill_solid(top, sizeof(top)/2, CRGB::Black);
+  fill_solid(bottom, sizeof(bottom)/2, CRGB::Black);
+  set_led(sline[s1], CRGB::Blue);
+}
+void u_runner() {
+  if ( s0&4 == 0 ) {
+    // up:
+    if ( s1 < slen-1 ) {
+      s1++;
+    } else {
+      s1--;
+      s0|=4;
+    }
+  } else {
+    // down:
+    if ( s1 == 0 ) {
+      // pick next branch:
+      runner_pick(s0&4);
+    } else {
+      s1--;
+    }
+  }
+}
+
+// RAINBOW -- colours over all leds
+void i_rainbow() {
+  s1=0;
+}
+void w_rainbow() {
+  fill_rainbow( top, sizeof(top)/2, s1, 7);
+  fill_rainbow( bottom, sizeof(bottom)/2, s1, 14);
+}
+void u_rainbow() {
+  s1+=1;
+}
+
+// BLACK
+void i_black() {}
+void w_black() {
+  fill_solid(top, sizeof(top)/2, CRGB::Black);
+  fill_solid(bottom, sizeof(bottom)/2, CRGB::Black);
+}
+void u_black() {}
 
 void receive() {
+  
 }
 
 
@@ -268,116 +494,7 @@ void sensors() {
 
 int numAllLeds;
 uint8_t h = 0;
-void write_leds() {
-  if ( h==0 ) {
-    fill_solid(upleft, sizeof(upleft)/2, CRGB::Blue);
-    fill_solid(upright, sizeof(upright)/2, CRGB::Black);
-    fill_solid(loleft, sizeof(loleft)/2, CRGB::Black);
-    fill_solid(loright, sizeof(loright)/2, CRGB::Black);
-  } else if ( h==1 ) {
-    fill_solid(upleft, sizeof(upleft)/2, CRGB::Black);
-    fill_solid(upright, sizeof(upright)/2, CRGB::Blue);
-    fill_solid(loleft, sizeof(loleft)/2, CRGB::Black);
-    fill_solid(loright, sizeof(loright)/2, CRGB::Black);
-  } else if ( h==2 ) {
-    fill_solid(upleft, sizeof(upleft)/2, CRGB::Black);
-    fill_solid(upright, sizeof(upright)/2, CRGB::Black);
-    fill_solid(loleft, sizeof(loleft)/2, CRGB::Blue);
-    fill_solid(loright, sizeof(loright)/2, CRGB::Black);
-  } else if ( h==3 ) {
-    fill_solid(upleft, sizeof(upleft)/2, CRGB::Black);
-    fill_solid(upright, sizeof(upright)/2, CRGB::Black);
-    fill_solid(loleft, sizeof(loleft)/2, CRGB::Black);
-    fill_solid(loright, sizeof(loright)/2, CRGB::Blue);
-  }
-  EVERY_N_MILLISECONDS(100) {
-    h++;
-    if ( h>3 ) {
-      h=0;
-    }
-  }
-  return;
-  //fill_solid(upleft, sizeof(upleft)/2, CRGB::Red);
-  //fill_solid(upright, sizeof(upright)/2, CRGB::Blue);
-  //fill_solid(loleft, sizeof(loleft)/2, CRGB::Green);
-  //fill_solid(loright, sizeof(loright)/2, CRGB::Yellow);
-//  fill_solid(top, sizeof(top)/2, CRGB::Blue);
-  fill_rainbow(top, sizeof(top)/2, h, 12);
-  EVERY_N_MILLISECONDS(100) {
-    h+=16;
-  }
-  return;
-  
-  if (mode == 5) {
-    numAllLeds = 28+9;
-    for (int i = 0; i < 28; i++) {
-      set_led_chsv(upleft[i],CHSV((rand() % 12 + 256 / numAllLeds * (state + (rand() % 5 - 1) + i) - 1) % 256, 255, 255));
-      set_led_chsv(upright[i],CHSV((rand() % 12 + 256 / numAllLeds * (state + (rand() % 5 - 1) + i) - 1) % 256, 255, 255));
-    }
-    for (int i = 0; i < 9; i++) {
-      set_led_chsv(loleft[i],CHSV((rand() % 12 + 256 / numAllLeds * (state + (rand() % 5 - 1) + 28 + i) - 1) % 256, 255, 255));
-      set_led_chsv(loleft[i],CHSV((rand() % 12 + 256 / numAllLeds * (state + (rand() % 5 - 1) + 28 + i) - 1) % 256, 255, 255));
-    }
-    state = (state + 1) % numAllLeds;
-    waitingTime = mspeed * mspeed * 62 + 8;
-  }
-  else if (mode == 4) {
-    numAllLeds = 28+9;
-    for (int i = 0; i < 28; i++) {
-      set_led_chsv(upleft[i],CHSV((7 + 256 / numAllLeds * (state + i) - 1) % 256, 255, 255));
-      set_led_chsv(upright[i],CHSV((7 + 256 / numAllLeds * (state + i) - 1) % 256, 255, 255));
-    }
-    for (int i = 0; i < 9; i++) {
-      set_led_chsv(loleft[i],CHSV((7 + 256 / numAllLeds * (state + 28 + i) - 1) % 256, 255, 255));
-      set_led_chsv(loleft[i],CHSV((7 + 256 / numAllLeds * (state + 28 + i) - 1) % 256, 255, 255));
-    }
-    state = (state + (-1 + (rand() % 4))) % numAllLeds;
-    waitingTime = mspeed * mspeed * 62 + 8;
-  }
-  else if (mode == 3) {
-    numAllLeds = 28+9;
-    for (int i = 0; i < 28; i++) {
-      set_led_chsv(upleft[i],CHSV((7 + 256 / numAllLeds * (state - i) - 1) % 256, 255, 255));
-      set_led_chsv(upright[i],CHSV((7 + 256 / numAllLeds * (state - i) - 1) % 256, 255, 255));
-    }
-    for (int i = 0; i < 9; i++) {
-      set_led_chsv(loleft[i],CHSV((7 + 256 / numAllLeds * (state - 28 - i) - 1) % 256, 255, 255));
-      set_led_chsv(loleft[i],CHSV((7 + 256 / numAllLeds * (state - 28 - i) - 1) % 256, 255, 255));
-    }
-    state = (state + 1) % numAllLeds;
-    waitingTime = mspeed * mspeed * 62 + 8;
-  }
-  else if (mode == 2) {
-    numAllLeds = 28+9;
-    for (int i = 0; i < 28; i++) {
-      set_led_chsv(upleft[i],CHSV((7 + 256 / numAllLeds * (state + i) - 1) % 256, 255, 255));
-      set_led_chsv(upright[i],CHSV((7 + 256 / numAllLeds * (state + i) - 1) % 256, 255, 255));
-    }
-    for (int i = 0; i < 9; i++) {
-      set_led_chsv(loleft[i],CHSV((7 + 256 / numAllLeds * (state + 28 + i) - 1) % 256, 255, 255));
-      set_led_chsv(loright[i],CHSV((7 + 256 / numAllLeds * (state + 28 + i) - 1) % 256, 255, 255));
-    }
-    state = (state + 1) % numAllLeds;
-    waitingTime = mspeed * mspeed * 62 + 8;
-  }
-  else if (mode == 1) {
-    single_pos(upleft, 28, state);
-    single_pos(loleft, 9, state);
-    single_pos(upright, 28, state);
-    single_pos(loright, 9, state);
-    state = (state + 1) % 63;
-    waitingTime = mspeed * mspeed * 62 + 8;
-  }
-  else { //mode == 0
-    CHSV col = CHSV(hue, 255, 255);
-    fill_solid(leds[0], 28, col);
-    fill_solid(leds[1], 28, col);
-    fill_solid(leds[2], 28, col);
-    fill_solid(leds[3], 28, col);
-    waitingTime = 50;
-  }
-  return;
-}
+uint8_t bright=0;
 
 void single_pos(ledaddr_t line[], uint8_t len, uint8_t pos) {
   for ( int i=0; i<len; i++) {
@@ -390,6 +507,7 @@ void single_pos(ledaddr_t line[], uint8_t len, uint8_t pos) {
   }
 }
 
+int pos=0;
 void run1() {
   grow(upleft, 28, pos/256.0f);
   grow(loleft, 9, pos/256.0f);
@@ -406,11 +524,6 @@ void set_led(ledaddr_t addr, const struct CHSV& color) {
   leds[LED_TO_PIN(addr)][LED_TO_LED(addr)] = color;
 }
 
-void set_led_chsv(ledaddr_t addr, CHSV colour) {
-  leds[LED_TO_PIN(addr)][LED_TO_LED(addr)] = colour;
-}
-
-
 void grow(ledaddr_t line[], uint8_t led_num, float progress) {
   progress = max(0.0f, min(1.0f, progress));
   uint8_t active = led_num * progress;
@@ -426,16 +539,8 @@ void grow(ledaddr_t line[], uint8_t led_num, float progress) {
 }
 
 
-void rainbow() 
-{
-  // FastLED's built-in rainbow generator
-//  fill_rainbow( leds[0], NUM_LEDS, gHue, 7);
-//  fill_rainbow( leds[1], NUM_LEDS, gHue, 7);
-//  fill_rainbow( leds[2], NUM_LEDS, gHue, 7);
-//  fill_rainbow( leds[3], NUM_LEDS, gHue, 7);
-}
 
-//--
+//-- FASTLEDFOO
 void fill_rainbow(ledaddr_t line[], int numToFill, uint8_t initialhue, uint8_t deltahue) {
   CHSV hsv;
   hsv.hue = initialhue;
@@ -456,6 +561,13 @@ void fill_solid(ledaddr_t line[], int numToFill, const struct CRGB& color) {
 void fill_solid(ledaddr_t line[], int numToFill, const struct CHSV& color) {
   for ( int i=0; i<numToFill; i++ ) {
     set_led(line[i], color);
+  }
+}
+
+void nscale8(ledaddr_t line[], uint16_t num_leds, uint8_t scale) {
+  for ( uint16_t i=0; i<num_leds; i++ ) {
+    ledaddr_t addr = line[i];
+    leds[LED_TO_PIN(addr)][LED_TO_LED(addr)].nscale8(scale);
   }
 }
 
